@@ -1,0 +1,7 @@
+!gradle-wrapper.jar
+.gradletasknamecache
+.gradle
+/build/
+/.metadata/
+bin
+gradle-app.setting
