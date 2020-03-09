@@ -5,14 +5,14 @@
 
 package bank.local;
 
-/* Simple Server -- not thread safe */
+/* Simple Server -- NOW THREADSAFE */
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import bank.Account;
 import bank.Bank;
@@ -39,47 +39,51 @@ public class ConprBankDriver implements bank.BankDriver {
 }
 
 class ConprBank implements Bank {
-	private Object MAP_LOCK = new Object();
-	private Map<String, ConprAccount> accounts = Collections.synchronizedMap(new HashMap<String, ConprAccount>());
+	private final Object ACCOUNTS_LOCK = new Object();
+	private Map<String, ConprAccount> accounts = new HashMap<>();
 
 	@Override
-	public Set<String> getAccountNumbers() {
-		Set<String> activeAccountNumbers = new HashSet<>();
-		synchronized (MAP_LOCK) {
-			for (ConprAccount acc : accounts.values()) {
-				if (acc.isActive()) {
-					activeAccountNumbers.add(acc.getNumber());
-				}
-			}
+	public Set<String> getAccountNumbers() throws IOException {
+		synchronized (ACCOUNTS_LOCK) {
+			return accounts.values().stream().filter(ConprAccount::isActive).map(ConprAccount::getNumber)
+					.collect(Collectors.toSet());
 		}
-		return activeAccountNumbers;
 	}
 
 	@Override
 	public String createAccount(String owner) {
 		final ConprAccount a = new ConprAccount(owner);
-		accounts.put(a.getNumber(), a);
+		synchronized (ACCOUNTS_LOCK) {
+			accounts.put(a.getNumber(), a);
+		}
 		return a.getNumber();
 	}
 
 	@Override
 	public boolean closeAccount(String number) {
-		final ConprAccount a = accounts.get(number);
-		if (a != null) {
-			synchronized (a) {
-				if (a.getBalance() != 0 || !a.isActive()) {
-					return false;
-				}
-				a.passivate();
-			}
-			return true;
+		ConprAccount a;
+		synchronized (ACCOUNTS_LOCK) {
+			a = accounts.get(number);
 		}
-		return false;
+
+		if (a == null) {
+			return false;
+		}
+
+		synchronized (a) {
+			if (a.getBalance() != 0 || !a.isActive()) {
+				return false;
+			}
+			a.passivate();
+		}
+		return true;
 	}
 
 	@Override
 	public Account getAccount(String number) {
-		return accounts.get(number);
+		synchronized (ACCOUNTS_LOCK) {
+			return accounts.get(number);
+		}
 	}
 
 	@Override
@@ -92,24 +96,20 @@ class ConprBank implements Bank {
 			from.deposit(amount);
 			throw e;
 		}
-
 	}
 }
 
 class ConprAccount implements Account {
-	private static Object ID_LOCK = new Object();
-	private static int id = 0;
+	private static final AtomicInteger NEXT_ID = new AtomicInteger(0);
 
-	private String number;
-	private String owner;
+	private final String number;
+	private final String owner;
 	private double balance;
 	private boolean active = true;
 
 	ConprAccount(String owner) {
 		this.owner = owner;
-		synchronized (ID_LOCK) {
-			this.number = "CONPR_ACC_" + id++;
-		}
+		this.number = "CONPR_ACC_" + NEXT_ID.getAndIncrement();
 	}
 
 	@Override
@@ -132,7 +132,7 @@ class ConprAccount implements Account {
 		return active;
 	}
 
-	synchronized void  passivate() {
+	synchronized void passivate() {
 		active = false;
 	}
 
