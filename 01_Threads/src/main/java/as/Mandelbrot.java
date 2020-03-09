@@ -1,6 +1,9 @@
 package as;
 
 import java.util.LinkedList;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javafx.scene.paint.Color;
 
@@ -44,29 +47,30 @@ public class Mandelbrot {
 		}
 	}
 
-	//
-	public static final int SEGMENT_SIZE = 80;
+	public final static int SEGMENT_SIZE = 20;
 
+	//
 	public static void computeParallel(PixelPainter painter, Plane plane, CancelSupport cancel) {
 		double half = plane.length / 2;
 		double reMin = plane.center.r - half;
 		double imMax = plane.center.i + half;
 		double step = plane.length / IMAGE_LENGTH;
 
-		LinkedList<Thread> threads = new LinkedList<Thread>();
+		LinkedList<Callable<Void>> threads = new LinkedList<>();
+		ExecutorService s = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 		for (int xSegment = 0; xSegment < IMAGE_LENGTH && !cancel.isCancelled(); xSegment = xSegment + SEGMENT_SIZE) { // x-axis
 			final int from = xSegment;
 			final int to = xSegment + SEGMENT_SIZE < IMAGE_LENGTH ? xSegment + SEGMENT_SIZE : IMAGE_LENGTH;
 			if (cancel.isCancelled()) {
 				return;
 			}
-			Thread thread = new Thread(() -> {
+			threads.add(() -> {
 				for (int x = from; x < to; x++) {
 					double re = reMin + x * step; // map pixel to complex plane
 					final int xF = x;
 					for (int y = 0; y < IMAGE_LENGTH; y++) { // y-axis
 						if (cancel.isCancelled()) {
-							return;
+							return null;
 						}
 						double im = imMax - y * step; // map pixel to complex plane
 
@@ -75,18 +79,13 @@ public class Mandelbrot {
 						painter.paint(xF, y, getColor(iterations));
 					}
 				}
-			}, "paint-thread-x-seg[" + xSegment + "]");
-			thread.start();
-			threads.add(thread);
+				return null;
+			});
 		}
-
 		try {
-			for (Thread t : threads) {
-				t.join();
-			}
+			s.invokeAll(threads);
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			throw new RuntimeException(e);
 		}
 	}
 
