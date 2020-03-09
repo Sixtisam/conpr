@@ -40,6 +40,7 @@ public class ConprBankDriver implements bank.BankDriver {
 
 class ConprBank implements Bank {
 	private final Object ACCOUNTS_LOCK = new Object();
+	private final Object CLOSE_LOCK = new Object();
 	private Map<String, ConprAccount> accounts = new HashMap<>();
 
 	@Override
@@ -70,13 +71,16 @@ class ConprBank implements Bank {
 			return false;
 		}
 
-		synchronized (a) {
-			if (a.getBalance() != 0 || !a.isActive()) {
-				return false;
+		// prevent account being closed while a transfer is in process
+		synchronized (CLOSE_LOCK) {
+			synchronized (a) {
+				if (a.getBalance() != 0 || !a.isActive()) {
+					return false;
+				}
+				a.passivate();
 			}
-			a.passivate();
+			return true;
 		}
-		return true;
 	}
 
 	@Override
@@ -89,12 +93,21 @@ class ConprBank implements Bank {
 	@Override
 	public void transfer(Account from, Account to, double amount)
 			throws IOException, InactiveException, OverdrawException {
-		from.withdraw(amount);
-		try {
-			to.deposit(amount);
-		} catch (Exception e) {
-			from.deposit(amount);
-			throw e;
+		// what happens when another threads closes account 'from'
+		// and then this thread fails on to.depose.
+		// then the other thread would have never been allowed to close the account
+		// because technically it never had a balanced of 0
+		// therefore prevent accounts from being locked while transfer is in process
+		synchronized (CLOSE_LOCK) {
+			from.withdraw(amount);
+			try {
+				// The case when another thread wants to withdraw from 'from' at this moment
+				// will not work for the other thread (not ideal, but also no data loss)
+				to.deposit(amount);
+			} catch (Exception e) {
+				from.deposit(amount);
+				throw e;
+			}
 		}
 	}
 }
@@ -112,10 +125,6 @@ class ConprAccount implements Account {
 		this.number = "CONPR_ACC_" + NEXT_ID.getAndIncrement();
 	}
 
-	@Override
-	public synchronized double getBalance() {
-		return balance;
-	}
 
 	@Override
 	public String getOwner() {
@@ -136,6 +145,11 @@ class ConprAccount implements Account {
 		active = false;
 	}
 
+	@Override
+	public synchronized double getBalance() {
+		return balance;
+	}
+	
 	@Override
 	public synchronized void deposit(double amount) throws InactiveException {
 		if (!active)
