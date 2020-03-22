@@ -8,6 +8,7 @@ public class Main {
         Thread t0 = new Thread(r, "Thread-0");
         Thread t1 = new Thread(r, "Thread-1");
         pm = new PetersonMutex(t0, t1);
+//        pm = new PetersonMutexVersion4(t0, t1);
         t0.start();
         t1.start();
     }

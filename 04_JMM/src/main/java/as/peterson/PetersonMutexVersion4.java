@@ -7,18 +7,22 @@ import java.util.Map;
  * Lock only for two threads.
  * @see http://de.wikipedia.org/wiki/Algorithmus_von_Peterson
  */
-public class PetersonMutex implements Mutex {
+public class PetersonMutexVersion4 implements Mutex {
     /** Associates the two threads with an index. */
     private final Map<Thread, Integer> idToIndex = new HashMap<>();
+    
+    private static class VolatileRef {
+        volatile boolean b = false;
+    }
 
     /** Entry enter[i] indicates that thread i wants to get the lock. */
-    private final boolean[] enter = {false, false};
+    private final VolatileRef[] enter = {new VolatileRef(), new VolatileRef()};
 
     /** Defines which thread proceeds if both threads acquire the lock. */
     private volatile int turn = 0;
 
     /** Register the two threads for simplicity. */
-    public PetersonMutex(Thread t0, Thread t1) {
+    public PetersonMutexVersion4(Thread t0, Thread t1) {
         idToIndex.put(t0, 0);
         idToIndex.put(t1, 1);
     }
@@ -34,13 +38,9 @@ public class PetersonMutex implements Mutex {
         @SuppressWarnings("unused")
         long t = 0;
 
-        // Happens-Before von enter -> turn, d.h. wenn turn geschrieben, ist auch enter[index] geschrieben
-        enter[index] = true;
+        enter[index].b = true;
         turn = otherIndex;
-        
-        // Reihenfolge getauscht!! da 'turn' volatile ist, gibt es eine Happens-Before Relation zu enter[]
-        // d.h. wenn turn zuerst gelesen, ist auch enter aktuell
-        while (turn != index && enter[otherIndex]) {
+        while (enter[otherIndex].b && turn != index) {
 //            if (System.currentTimeMillis() - t > 100) {
 //                System.out.println(turn);
 //                t = System.currentTimeMillis();
@@ -49,8 +49,6 @@ public class PetersonMutex implements Mutex {
     }
 
     public void unlock() {
-		enter[getIndex()] = false;
-		// erzwingt eine happens-before von enter -> turn und somit ist für code der turn liest, enter auch aktuell
-		turn = turn;
+		enter[getIndex()].b = false;
 	}
 }
