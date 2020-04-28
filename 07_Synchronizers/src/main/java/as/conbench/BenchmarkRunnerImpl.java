@@ -20,7 +20,7 @@ public class BenchmarkRunnerImpl implements BenchmarkRunner {
             // Warmup phase
             System.out.println("Warming up");
             for (BenchmarkMethodDescriptor mDesc : benchDesc.testMethods) {
-                mDesc.method.invoke(testObject, 100_000, 1);
+                mDesc.method.invoke(testObject, benchDesc.nTimes, 1);
             }
 
             System.out.println("Starting benchmark..");
@@ -61,17 +61,19 @@ public class BenchmarkRunnerImpl implements BenchmarkRunner {
                 // run all callables
                 List<Future<Long>> results = svc.invokeAll(callables);
                 // collect time of all callables and sum up
-                long totalTime = 0l;
+                long maxTime = 0l;
                 for (Future<Long> result : results) {
-                    // wait for each callable to complete
-                    totalTime += result.get();
+                    long time = result.get();
+                    if(time > maxTime) {
+                        maxTime = time;
+                    }
 
                 }
                 // TODO it is not clear how to calculate total time 
                 // divide through nTimes
-                totalTime = (long) (totalTime / (double) nTimes);
+                maxTime = (long) (maxTime / (double) nTimes);
                 System.out.println(
-                        "- Run[" + i + "] " + String.join(", ", methodStr) + ", Duration: " + totalTime + "ns");
+                        "- Run[" + i + "] " + String.join(", ", methodStr) + ", Duration: " + maxTime + "ns");
                 svc.shutdownNow(); // terminate all threads
             }
 
