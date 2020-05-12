@@ -41,13 +41,10 @@ class Hacker(val name: String, var age: Int) extends Person {
 
 }
 
-class MyAnno(value:String) extends scala.annotation.ClassfileAnnotation
-
 /* Singleton Instanz
  * - Alle Members darin sind wie 'static' in Java
  */
 
-@MyAnno("tsdf")
 object ScalaCheatSheet {
   /* main Methode (Einstiegspunkt)
    * - Array ist ein normaler Collection Typ

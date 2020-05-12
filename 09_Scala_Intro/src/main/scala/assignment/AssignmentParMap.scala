@@ -2,24 +2,31 @@ package assignment
 
 import java.util.concurrent.{CompletableFuture, Executors, Future}
 
+import scala.annotation.tailrec
+
 // Assigment 9
 
 object Task1 {
   val exSvc = Executors.newCachedThreadPool()
 
-  def seqMap[A, B](l: List[A], f: A => B): List[B] = {
+  @tailrec
+  def seqMapHelper[A,B](l: List[A], f: A => B, accumulator : List[B]): List[B] = {
     l match {
-      case Nil => Nil
-      case x :: xs => f(x) :: seqMap(xs, f)
+      case Nil => accumulator
+      case x :: xs => seqMapHelper(xs, f, accumulator :+ f(x))
     }
   }
 
-  def parMap[A, B](l: List[A], f: A => B): List[B] = {
+  def seqMap[A, B](l: List[A], f: A => B): List[B] = {
+    seqMapHelper(l, f, List())
+  }
+
+  def parMap[A, B](list: List[A], f: A => B): List[B] = {
     // Map to Future[B]
     val mapFunc = (el: A) => exSvc.submit(() => f(el));
-    val futureList = l.map(mapFunc)
-    // Wait for all Future[B] and map back to B
-    futureList.map(_.get())
+    // Submit Callable for each element, in the end wait for completion
+    list.map(mapFunc)
+        .map(_.get())
   }
 
   def main(args: Array[String]): Unit = {
@@ -31,11 +38,17 @@ object Task1 {
 
 object Task2 {
   val exSvc = Executors.newCachedThreadPool()
-  def seqFilter[A](l: List[A], p: A => Boolean): List[A] = {
+
+  @tailrec
+  def seqFilterHelper[A](l: List[A], p: A => Boolean, accumulator : List[A]): List[A] = {
     l match {
-      case Nil => Nil
-      case x :: xs => if (p(x)) x :: seqFilter(xs, p) else seqFilter(xs, p)
+      case Nil => accumulator
+      case x :: xs => seqFilterHelper(xs, p, if(p(x)) accumulator :+ x else accumulator)
     }
+  }
+
+  def seqFilter[A](l: List[A], p: A => Boolean): List[A] = {
+    seqFilterHelper(l, p, List())
   }
 
   def parFilter[A](l: List[A], p: A => Boolean): List[A] = {
@@ -49,20 +62,20 @@ object Task2 {
   }
 
   def main(args: Array[String]): Unit = {
-    println(parFilter(List(1, 2, 3, 4, 5, 6), (x: Int) => x > 2))
+    println(seqFilter((1 to 100).toList, (x: Int) => x > 23))
   }
 }
 
 object Task3 {
   // Assuming left reduce
-  def seqReduce[A](l: List[A], f: (A, A) => A): A = {
+  @tailrec
+  def seqReduceTail[A](l: List[A], f: (A, A) => A, accumulator : A): A = {
     if (l.isEmpty)
       throw new IllegalArgumentException("list must not be empty")
     else l match {
-      case x :: y :: Nil => f(x, y)
-      case x :: xs => f(x, seqReduce(xs, f))
+      case x :: Nil => f(x, accumulator)
+      case x :: xs => seqReduceTail(xs, f, f(x, accumulator))
     }
-
   }
 
   val exSvc = Executors.newCachedThreadPool()
@@ -70,26 +83,27 @@ object Task3 {
   /**
    * reduces the array pairwaise [a,b,c,d] => [Future[f(a,b)], Future[f(c,d)]]
    */
-  def parReducePairwise[A](l : List[A], f: (A,A) => A) : List[Future[A]] = {
+  @tailrec
+  def parReducePairwise[A](l: List[A], f: (A, A) => A, accumulator : List[Future[A]]): List[Future[A]] = {
     l match {
-      case Nil => List()
-      case x :: Nil => List(CompletableFuture.completedFuture(x))
-      case x :: y :: xs => exSvc.submit(() => f(x,y)) :: parReducePairwise(xs, f)
+      case Nil => accumulator
+      case x :: Nil => accumulator :+ CompletableFuture.completedFuture(x)
+      case x :: y :: xs => parReducePairwise(xs, f, accumulator :+ exSvc.submit(() => f(x, y)))
     }
   }
 
   // f must be commutative in order to be logically equivalent to seqReduce
+  @tailrec
   def parReduce[A](fullList: List[A], reduceFunc: (A, A) => A): A = {
-
     if (fullList.isEmpty)
       throw new IllegalArgumentException("list must not be empty")
     else {
       // Reduce pairwise and wait for future completion on each
-      val futureList = parReducePairwise(fullList, reduceFunc).map(_.get)
+      val futureList = parReducePairwise(fullList, reduceFunc, List()).map(_.get)
       futureList match {
-          // if only two values left, apply reduceFunc to it and complete
-        case x :: y :: Nil => reduceFunc(x,y)
-          // if more than 2 values left, call parReduce again with that list
+        // if only two values left, apply reduceFunc to it and complete
+        case x :: y :: Nil => reduceFunc(x, y)
+        // if more than 2 values left, call parReduce again with that list
         case _ => parReduce(futureList, reduceFunc)
       }
     }
@@ -97,6 +111,7 @@ object Task3 {
 
   def main(args: Array[String]): Unit = {
     // Big lists dont work because of stackoverflow errors
-    println(parReduce((1 to 100).toList, (a: Int, b: Int) => a + b))
+    println(seqReduceTail((1l to 1000000l).toList, (a: Long, b: Long) => a + b, 0l))
+    exSvc.shutdownNow()
   }
 }
