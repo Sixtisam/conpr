@@ -13,13 +13,13 @@ repositories {
 }
 
 dependencies {
-    compile 'org.scala-lang:scala-library:2.13.2'
-    compile 'org.scala-lang.modules:scala-parallel-collections_2.13:0.2.0'
+    implementation 'org.scala-lang:scala-library:2.13.2'
+    implementation 'org.scala-lang.modules:scala-parallel-collections_2.13:0.2.0'
 
-    compile 'io.reactivex:rxscala_2.13:0.27.0'
-    compile 'io.reactivex:rxswing:0.27.0'
-    compile 'org.json:json:20180813'
-    compile 'jline:jline:2.14.6'
+    implementation 'io.reactivex:rxscala_2.13:0.27.0'
+    implementation 'io.reactivex:rxswing:0.27.0'
+    implementation 'org.json:json:20180813'
+    implementation 'jline:jline:2.14.6'
 }
 
 

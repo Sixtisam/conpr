@@ -26,7 +26,7 @@ object ImmutableCollections extends App {
 
   val large = list0.find(i => i > 12)        // None
   
-  val small = list0.find(i => i < 12)        // Some(1)
+  val small = list0.find {_ < 12}        // Some(1)
   
   list0.foreach(i => print(s"$i "))         // 1 2 1
 

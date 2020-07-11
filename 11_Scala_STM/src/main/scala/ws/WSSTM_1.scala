@@ -65,9 +65,7 @@ class AtomicAccount {
         balance -= amount
   }
 
-  def getBalance(): Double = atomic { implicit tx =>
-    balance.get
-  }
+  def getBalance(): Double = balance.single.get
 }
 
 /* Aufgaben: 
